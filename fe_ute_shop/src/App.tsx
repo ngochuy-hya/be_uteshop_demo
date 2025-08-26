@@ -1,11 +1,11 @@
-// src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import VerifyOtpPage from "./pages/VerifyOtpPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage.tsx";
 import ProfileView from "./pages/ProfileUserPage";
+import VerifyOtpCodePage from "./pages/VerifyOtpCodePage.tsx";
 
 export default function App() {
     return (
@@ -24,8 +24,9 @@ export default function App() {
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
                         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                        <Route path="/verify-otp" element={<VerifyOtpPage />} />
+                        <Route path="/reset-password" element={<ResetPasswordPage />} />
                         <Route path="/profile" element={<ProfileView />} />
+                        <Route path="/verify-otp" element={<VerifyOtpCodePage />} />
                         <Route path="*" element={<Navigate to="/login" replace />} />
                     </Routes>
                 </div>
