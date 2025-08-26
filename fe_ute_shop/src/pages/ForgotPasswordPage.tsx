@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { FormEvent } from "react";
 import { Input } from "../components/UI/Input";
 import { Button } from "../components/UI/Button";
-import { useAppDispatch, useAppState } from "../store/hooks";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { forgotPasswordAsync, clearError } from "../store/slices/authSlice";
 
 type Errors = Partial<Record<"email" | "form", string>>;
@@ -15,8 +15,7 @@ export default function ForgotPasswordPage() {
     const nav = useNavigate();
     
     const dispatch = useAppDispatch();
-    const { auth } = useAppState();
-    const { isLoading, error } = auth;
+    const { isLoading, error } = useAppSelector((state) => state.auth);
 
     useEffect(() => {
         if (error) {

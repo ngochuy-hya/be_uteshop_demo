@@ -2,22 +2,25 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import type { FormEvent } from "react";
-import type { AxiosError } from "axios";
 import { Input } from "../components/UI/Input";
 import { Button } from "../components/UI/Button";
-import { api } from "../lib/api";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { verifyOTPAsync, resendOTPAsync, clearError } from "../store/slices/authSlice";
 
 type Errors = Partial<Record<"otp" | "form", string>>;
 
 export default function VerifyOtpCodePage() {
     const nav = useNavigate();
     const loc = useLocation();
-    const state = (loc.state as { email?: string } | null) ?? null;
+    const dispatch = useAppDispatch();
+    const { isLoading, error } = useAppSelector((state) => state.auth);
+    
+    const state = (loc.state as { email?: string; mode?: string } | null) ?? null;
     const email = state?.email ?? ""; // vẫn giữ email từ state (ẩn, không nhập)
+    const mode = state?.mode || "register"; // "register" hoặc "reset"
 
     const [otp, setOtp] = useState("");
     const [errors, setErrors] = useState<Errors>({});
-    const [loading, setLoading] = useState(false);
     const [cooldown, setCooldown] = useState(0);
 
     useEffect(() => {
@@ -25,6 +28,18 @@ export default function VerifyOtpCodePage() {
         const t = setInterval(() => setCooldown((s) => s - 1), 1000);
         return () => clearInterval(t);
     }, [cooldown]);
+
+    useEffect(() => {
+        // Clear error when component mounts
+        dispatch(clearError());
+    }, [dispatch]);
+
+    useEffect(() => {
+        // Update local error state when Redux error changes
+        if (error) {
+            setErrors({ form: error });
+        }
+    }, [error]);
 
     const validate = () => {
         const next: Errors = {};
@@ -38,48 +53,56 @@ export default function VerifyOtpCodePage() {
 
     const onSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (loading) return;
+        if (isLoading) return;
         if (!validate()) return;
 
         try {
-            setLoading(true);
             setErrors({});
+            dispatch(clearError());
 
-            // endpoint verify OTP khi đăng ký
-            await api.post("/auth/signup/verify-otp", { email, otp });
-
-            nav("/login", { state: { verified: true, email } });
+            if (mode === "reset") {
+                // Cho forgot password: chuyển đến reset password page với email và otp
+                nav("/reset-password", { state: { email, otp } });
+            } else {
+                // Cho register: verify OTP để activate account
+                const result = await dispatch(verifyOTPAsync({ email, otp }));
+                
+                if (verifyOTPAsync.fulfilled.match(result)) {
+                    nav("/login", { state: { verified: true, email } });
+                }
+            }
         } catch (err) {
-            const ax = err as AxiosError<{ message?: string }>;
-            setErrors({
-                form: ax.response?.data?.message || ax.message || "OTP verification failed.",
-            });
-        } finally {
-            setLoading(false);
+            // Error will be handled by Redux and useEffect
+            console.error('Verify OTP error:', err);
         }
     };
 
     const resendOtp = async () => {
-        if (cooldown > 0 || loading) return;
+        if (cooldown > 0 || isLoading) return;
+        
         try {
-            setLoading(true);
             setErrors({});
-            await api.post("/auth/signup/resend-otp", { email });
-            setCooldown(60);
+            dispatch(clearError());
+            
+            // Dispatch resend OTP action với type dựa trên mode
+            const otpType = mode === "reset" ? 'forgot-password' : 'register';
+            const result = await dispatch(resendOTPAsync({ email, type: otpType }));
+            
+            if (resendOTPAsync.fulfilled.match(result)) {
+                setCooldown(60);
+            }
         } catch (err) {
-            const ax = err as AxiosError<{ message?: string }>;
-            setErrors({
-                form: ax.response?.data?.message || ax.message || "Could not resend OTP.",
-            });
-        } finally {
-            setLoading(false);
+            // Error will be handled by Redux and useEffect
+            console.error('Resend OTP error:', err);
         }
     };
 
     return (
             <div className="w-[400px] max-w-full rounded-lg p-8 text-center border border-white/50 bg-white/10 backdrop-blur-[9px]">
                 <form className="flex flex-col" onSubmit={onSubmit} noValidate>
-                    <h2 className="text-3xl mb-5 text-white">Verify OTP</h2>
+                    <h2 className="text-3xl mb-5 text-white">
+                        {mode === "reset" ? "Verify Reset Code" : "Verify OTP"}
+                    </h2>
 
                     {errors.form && (
                         <div className="mb-3 text-sm text-red-200 bg-red-500/20 rounded p-2 text-left">
@@ -100,14 +123,14 @@ export default function VerifyOtpCodePage() {
                         error={errors.otp}
                     />
 
-                    <Button type="submit" loading={loading} className="mt-2 w-full">
-                        {loading ? "Verifying..." : "Verify OTP"}
+                    <Button type="submit" loading={isLoading} className="mt-2 w-full">
+                        {isLoading ? "Verifying..." : (mode === "reset" ? "Continue" : "Verify OTP")}
                     </Button>
 
                     <Button
                         type="button"
                         onClick={resendOtp}
-                        disabled={cooldown > 0 || loading || !email}
+                        disabled={cooldown > 0 || isLoading || !email}
                         className="mt-3 w-full bg-white text-black font-semibold border-2 border-transparent
              hover:bg-transparent hover:text-white hover:border-white
              transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"

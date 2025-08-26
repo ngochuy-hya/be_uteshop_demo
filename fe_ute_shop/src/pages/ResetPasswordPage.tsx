@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { FormEvent } from "react";
-import type { AxiosError } from "axios";
 import { Input } from "../components/UI/Input";
 import { Button } from "../components/UI/Button";
-import { api } from "../lib/api";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { resetPasswordAsync, clearError } from "../store/slices/authSlice";
 
 type Errors = Partial<Record<"password" | "confirmPassword" | "form", string>>;
 
@@ -20,13 +20,26 @@ function useEmailOtpFromRouter() {
 export default function ResetPasswordPage() {
     const { email, otp } = useEmailOtpFromRouter();
     const nav = useNavigate();
+    const dispatch = useAppDispatch();
+    const { isLoading, error } = useAppSelector((state) => state.auth);
 
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [errors, setErrors] = useState<Errors>({});
-    const [loading, setLoading] = useState(false);
 
     const canSubmit = useMemo(() => !!email && !!otp, [email, otp]);
+
+    useEffect(() => {
+        // Clear error when component mounts
+        dispatch(clearError());
+    }, [dispatch]);
+
+    useEffect(() => {
+        // Update local error state when Redux error changes
+        if (error) {
+            setErrors({ form: error });
+        }
+    }, [error]);
 
     const validate = () => {
         const next: Errors = {};
@@ -42,29 +55,26 @@ export default function ResetPasswordPage() {
 
     const onSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (loading) return;
+        if (isLoading) return;
         if (!validate()) return;
 
         try {
-            setLoading(true);
             setErrors({});
+            dispatch(clearError());
 
-            // Đổi mật khẩu dựa trên email + otp đã xác thực
-            // Ví dụ endpoint: /auth/forgot-password/reset
-            await api.post("/auth/forgot-password/reset", {
-                email,
-                otp,
-                password,
-            });
-
-            nav("/login", { state: { resetDone: true, email } });
+            // Dispatch reset password action
+            const result = await dispatch(resetPasswordAsync({ 
+                email, 
+                otp, 
+                newPassword: password 
+            }));
+            
+            if (resetPasswordAsync.fulfilled.match(result)) {
+                nav("/login", { state: { resetDone: true, email } });
+            }
         } catch (err) {
-            const ax = err as AxiosError<{ message?: string }>;
-            setErrors({
-                form: ax.response?.data?.message || ax.message || "Reset password failed.",
-            });
-        } finally {
-            setLoading(false);
+            // Error will be handled by Redux and useEffect
+            console.error('Reset password error:', err);
         }
     };
 
@@ -102,8 +112,8 @@ export default function ResetPasswordPage() {
                         error={errors.confirmPassword}
                     />
 
-                    <Button type="submit" loading={loading} className="mt-2 w-full" disabled={!canSubmit}>
-                        {loading ? "Processing..." : "Reset password"}
+                    <Button type="submit" loading={isLoading} className="mt-2 w-full" disabled={!canSubmit}>
+                        {isLoading ? "Processing..." : "Reset password"}
                     </Button>
 
                     <div className="text-center mt-8 text-white">
